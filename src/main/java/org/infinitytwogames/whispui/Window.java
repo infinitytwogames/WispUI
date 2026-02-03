@@ -34,6 +34,7 @@ public class Window {
     private int width;
     private int height;
     private final Logger logger = LoggerFactory.getLogger(Window.class);
+    private static boolean isGLFWInit = false;
     
     private GLFWFramebufferSizeCallback framebufferSizeCallback;
     private GLFWKeyCallback glfwKeyCallback;
@@ -67,9 +68,11 @@ public class Window {
     }
     
     private void initGLFW() {
+        if (isGLFWInit) return;
         if (!glfwInit()) throw new IllegalStateException("Unable to initiate GLFW");
         long primaryMonitor = GLFW.glfwGetPrimaryMonitor();
         GLFWVidMode vidMode = GLFW.glfwGetVideoMode(primaryMonitor);
+        isGLFWInit = true;
         
         GLFW.glfwDefaultWindowHints();
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
@@ -150,7 +153,7 @@ public class Window {
          });
     }
     
-    public void initOpenGL() {
+    public void init() {
         GL.createCapabilities();
         GL11.glEnable(GL11.GL_DEPTH_TEST);
         GL11.glViewport(0, 0, width, height);
@@ -158,6 +161,11 @@ public class Window {
     
     public long getWindow() {
         return window;
+    }
+    
+    public void update() {
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
     
     public boolean isShouldClose() {

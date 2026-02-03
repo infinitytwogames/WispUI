@@ -10,54 +10,55 @@ import static org.lwjgl.system.MemoryUtil.memFree;
  * A native float buffer that behaves like a C++ dynamic array (vector-style)
  * but implemented in Java using off-heap memory.
  * <p>
- * This class allocates a manually managed {@link FloatBuffer} using
- * {@link org.lwjgl.system.MemoryUtil#memAllocFloat(int)}. It avoids the
+ * This class allocates a manually managed {@link java.nio.FloatBuffer} using
+ * {@code org.lwjgl.system.MemoryUtil#memAllocFloat(int)}. It avoids the
  * Java garbage collector entirely, offering better performance and control
  * in graphics-intensive workloads such as OpenGL or Vulkan rendering.
  * </p>
  *
- * <h3>How It Works</h3>
+ * <h2>How It Works</h2>
  * <ul>
- *     <li>Allocates an initial capacity of {@code 4096} floats (4 KB).</li>
- *     <li>Automatically resizes via {@link #require(int)} when additional space is needed.</li>
- *     <li>Tracks the number of written floats to keep a clean separation between
- *     used and free space.</li>
- *     <li>Provides fast bulk writes with {@link #put(float[])},
- *     {@link #put(FloatBuffer)}, and single-element {@link #put(float)}.</li>
+ * <li>Allocates an initial capacity of {@code 4096} floats (4 KB).</li>
+ * <li>Automatically resizes via {@code #require(int)} when additional space is needed.</li>
+ * <li>Tracks the number of written floats to keep a clean separation between
+ * used and free space.</li>
+ * <li>Provides fast bulk writes with {@code #put(float[])},
+ * {@code #put(FloatBuffer)}, and single-element {@code #put(float)}.</li>
  * </ul>
  *
- * <h3>Memory Management</h3>
+ * <h2>Memory Management</h2>
  * <p>
  * Since this buffer is manually managed (off-heap), you <strong>must</strong> call
- * {@link #cleanup()} or use this class inside a try-with-resources block
+ * {@code #cleanup()} or use this class inside a try-with-resources block
  * to avoid memory leaks:
  * </p>
  *
  * <pre>{@code
  * try (NFloatBuffer buf = new NFloatBuffer()) {
- *     buf.put(1.0f);
- *     buf.put(2.0f);
- *     FloatBuffer fb = buf.getBuffer();
- *     // ... use fb in OpenGL calls
- * } // Automatically calls buf.close() → cleanup()
+ * buf.put(1.0f);
+ * buf.put(2.0f);
+ * FloatBuffer fb = buf.getBuffer();
+ * // ... use fb in OpenGL calls
+ * } // Automatically calls buf.close() -> cleanup()
  * }</pre>
  *
- * <h3>Why Use This?</h3>
+ * <h2>Why Use This?</h2>
  * <p>
  * Useful when you need many dynamically growing buffers (like ArrayLists)
  * but want to avoid JVM heap bloat. It’s also a great fit for batch rendering,
  * mesh data, or GPU upload buffers.
  * </p>
  *
- * <h3>Warning</h3>
+ * <h2>Warning</h2>
  * <ul>
- *     <li>Forgetting to call {@link #cleanup()} or using this outside of
- *     try-with-resources will cause a memory leak.</li>
- *     <li>Once cleaned up, this buffer is invalid and must not be reused.</li>
+ * <li>Forgetting to call {@code cleanup()} or using this outside of
+ * try-with-resources will cause a memory leak.</li>
+ * <li>Once cleaned up, this buffer is invalid and must not be reused.</li>
  * </ul>
  *
- * @see FloatBuffer
- * @see org.lwjgl.system.MemoryUtil
+ * @author MeroSsSany/Infinity Two Games
+ * @version 1.0
+ * @see java.nio.FloatBuffer
  */
 public final class NFloatBuffer extends NativeBuffer {
     private FloatBuffer buffer;// 4 KB

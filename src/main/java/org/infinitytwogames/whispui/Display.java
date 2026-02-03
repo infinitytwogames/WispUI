@@ -12,6 +12,9 @@ import java.nio.FloatBuffer;
 
 import static org.infinitytwogames.whispui.data.Constants.UI_DESIGN_HEIGHT;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT;
+import static org.lwjgl.opengl.GL11C.GL_DEPTH_BUFFER_BIT;
+import static org.lwjgl.opengl.GL11C.glClear;
 
 // MODIFIED
 public final class Display {
@@ -26,6 +29,10 @@ public final class Display {
     
     public static void init() {
         EventBus.connect(Display.class);
+    }
+    
+    public void clearBufferBits() {
+        glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     }
     
     public static Vector2i transformVirtualToWindow(Window window, int virtualX, int virtualY) {

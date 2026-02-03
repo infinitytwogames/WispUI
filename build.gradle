@@ -21,17 +21,17 @@ project.ext.lwjglNatives = {
 dependencies {
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'ch.qos.logback:logback-classic:1.5.13'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     api "org.joml:joml:1.10.5"
     api "org.lwjgl:lwjgl-opengl"
     api "org.lwjgl:lwjgl-glfw"
     api "org.lwjgl:lwjgl:3.3.3"
+    api 'org.slf4j:slf4j-api:2.0.9'
+    api "org.lwjgl:lwjgl-stb"
 
     implementation platform("org.lwjgl:lwjgl-bom:3.3.3")
-    implementation "org.lwjgl:lwjgl-stb"
-    implementation 'ch.qos.logback:logback-classic:1.5.13'
-    implementation 'ch.qos.logback:logback-core:1.5.13'
 
     runtimeOnly "org.lwjgl:lwjgl::$lwjglNatives"
     runtimeOnly "org.lwjgl:lwjgl-glfw::$lwjglNatives"
@@ -41,4 +41,26 @@ dependencies {
 
 test {
     useJUnitPlatform()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar() // Essential for libraries so you can see code in Nyctotile
+    withJavadocJar()
+}
+
+tasks.withType(Javadoc) {
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            // Optional: adds source code so you can read it in the debugger
+            artifact sourcesJar
+        }
+    }
 }
