@@ -1,0 +1,44 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'org.infinitytwogames'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+project.ext.lwjglNatives = {
+    def os = System.getProperty("os.name").toLowerCase()
+    if (os.contains("win")) return "natives-windows"
+    if (os.contains("linux")) return "natives-linux"
+    if (os.contains("mac")) return "natives-macos"
+    return "natives-linux"
+}()
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    api "org.joml:joml:1.10.5"
+    api "org.lwjgl:lwjgl-opengl"
+    api "org.lwjgl:lwjgl-glfw"
+    api "org.lwjgl:lwjgl:3.3.3"
+
+    implementation platform("org.lwjgl:lwjgl-bom:3.3.3")
+    implementation "org.lwjgl:lwjgl-stb"
+    implementation 'ch.qos.logback:logback-classic:1.5.13'
+    implementation 'ch.qos.logback:logback-core:1.5.13'
+
+    runtimeOnly "org.lwjgl:lwjgl::$lwjglNatives"
+    runtimeOnly "org.lwjgl:lwjgl-glfw::$lwjglNatives"
+    runtimeOnly "org.lwjgl:lwjgl-opengl::$lwjglNatives"
+    runtimeOnly "org.lwjgl:lwjgl-stb::$lwjglNatives"
+}
+
+test {
+    useJUnitPlatform()
+}
