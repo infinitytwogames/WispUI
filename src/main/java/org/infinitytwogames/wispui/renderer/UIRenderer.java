@@ -1,0 +1,578 @@
+package org.infinitytwogames.wispui.renderer;
+
+import org.infinitytwogames.wispui.Display;
+import org.infinitytwogames.wispui.Window;
+import org.infinitytwogames.wispui.data.RGBA;
+import org.infinitytwogames.wispui.data.ShaderFiles;
+import org.infinitytwogames.wispui.data.texture.Texture;
+import org.infinitytwogames.wispui.data.texture.TextureAtlas;
+import org.infinitytwogames.wispui.event.SubscribeEvent;
+import org.infinitytwogames.wispui.event.bus.EventBus;
+import org.infinitytwogames.wispui.event.state.WindowResizedEvent;
+import org.infinitytwogames.wispui.ui.base.UI;
+import org.joml.Matrix4f;
+import org.joml.Vector2i;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL20;
+import org.lwjgl.opengl.GL30;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
+
+import java.nio.FloatBuffer;
+
+import static org.infinitytwogames.wispui.Display.transformVirtualToWindow;
+import static org.infinitytwogames.wispui.data.Constants.UI_DESIGN_HEIGHT;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
+import static org.lwjgl.opengl.GL13.glActiveTexture;
+import static org.lwjgl.opengl.GL20.*;
+
+/**
+ * High-performance batch renderer for UI components and text.
+ * <p>
+ * This renderer manages a dynamic vertex buffer (VBO) to group multiple quads
+ * into a single draw call. It automatically handles state changes (textures vs.
+ * colored boxes) by "flushing" the current batch to the GPU.
+ * </p>
+ *
+ *
+ *
+ * <h2>Technical Architecture</h2>
+ * <ul>
+ * <li><b>Batch Management:</b> Tracks {@code currentBatchIsTextured} and
+ * {@code currentAtlasTextureID}. If a new item requires a different texture,
+ * the current data is sent to the GPU (flushed) and a new batch begins.</li>
+ * <li><b>Vertex Layout:</b> Uses a 19-float vertex structure containing:
+ * Position (3), RGBA (4), UV (2), Size (2), Radius (1), LocalUV (2), Border (1), BorderRGBA (4).</li>
+ * <li><b>Coordinate Space:</b> Projects coordinates using an Orthographic matrix
+ * based on a fixed virtual height ({@code UI_DESIGN_HEIGHT}).</li>
+ * </ul>
+ *
+ * @author Infinity Two Games
+ */
+public class UIRenderer {
+    private final Window window;
+    private int vaoId, vboId;
+    private FloatBuffer vertexBuffer;
+    private float[] vertexData;
+    private int vertexDataIndex = 0;
+    private final int MAX_QUADS = 1000;
+    private final int VERTEX_SIZE = 19;
+    private final int VERTICES_PER_QUAD = 6;
+    private final int FLOATS_PER_QUAD = VERTEX_SIZE * VERTICES_PER_QUAD;
+    
+    private final Matrix4f projection = new Matrix4f();
+    private int shaderProgramId;
+    
+    // --- BATCH STATE MANAGEMENT (NEW) ---
+    private boolean currentBatchIsTextured = false;
+    private int currentAtlasTextureID = 0; // The texture ID of the currently bound atlas
+    
+    public UIRenderer(Window window, int shaderProgramId) {
+        this.window = window;
+        this.shaderProgramId = shaderProgramId;
+        init();
+    }
+    
+    public UIRenderer(Window window, ShaderProgram program) {
+        this.window = window;
+        this.shaderProgramId = program.getProgramId();
+        init();
+    }
+    
+    public UIRenderer(Window window) {
+        this.window = window;
+        this.shaderProgramId = new ShaderProgram(ShaderFiles.uiVertex, ShaderFiles.uiFragment).getProgramId();
+        init();
+    }
+    
+    private void init() {
+        EventBus.connect(this);
+        
+        vaoId = GL30.glGenVertexArrays();
+        vboId = GL15.glGenBuffers();
+        vertexData = new float[MAX_QUADS * FLOATS_PER_QUAD];
+        vertexBuffer = MemoryUtil.memAllocFloat(MAX_QUADS * FLOATS_PER_QUAD);
+        
+        GL30.glBindVertexArray(vaoId);
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vboId);
+        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, (long) vertexData.length * Float.BYTES, GL15.GL_DYNAMIC_DRAW);
+        
+        // Attribute Pointers remain correct
+        // Position (3 floats)
+        GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, VERTEX_SIZE * Float.BYTES, 0);
+        // Color (4 floats)
+        GL20.glVertexAttribPointer(1, 4, GL11.GL_FLOAT, false, VERTEX_SIZE * Float.BYTES, 3 * Float.BYTES);
+        GL20.glVertexAttribPointer(2, 2, GL11.GL_FLOAT, false, VERTEX_SIZE * Float.BYTES, 7 * Float.BYTES);
+        // layout(location = 3): Size (vec2)
+        GL20.glVertexAttribPointer(3, 2, GL11.GL_FLOAT, false, VERTEX_SIZE * Float.BYTES, 9 * Float.BYTES);
+        // layout(location = 4): Radius (float)
+        GL20.glVertexAttribPointer(4, 1, GL11.GL_FLOAT, false, VERTEX_SIZE * Float.BYTES, 11 * Float.BYTES);
+        // layout(location = 5): LocalUV (vec2) - This helps the shader know where it is in the box
+        GL20.glVertexAttribPointer(5, 2, GL11.GL_FLOAT, false, VERTEX_SIZE * Float.BYTES, 12 * Float.BYTES);
+        // layout(location = 6): Border Thickness (float)
+        GL20.glVertexAttribPointer(6, 1, GL11.GL_FLOAT, false, VERTEX_SIZE * Float.BYTES, 14 * Float.BYTES);
+        // layout(location = 7): Border Color (vec4)
+        GL20.glVertexAttribPointer(7, 4, GL11.GL_FLOAT, false, VERTEX_SIZE * Float.BYTES, 15 * Float.BYTES);
+        
+        GL20.glEnableVertexAttribArray(0);
+        GL20.glEnableVertexAttribArray(1);
+        GL20.glEnableVertexAttribArray(2);
+        GL20.glEnableVertexAttribArray(3);
+        GL20.glEnableVertexAttribArray(4);
+        GL20.glEnableVertexAttribArray(5);
+        GL20.glEnableVertexAttribArray(6);
+        GL20.glEnableVertexAttribArray(7);
+        
+        GL30.glBindVertexArray(0);
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
+        
+        // Set the u_texture sampler uniform once
+        GL20.glUseProgram(shaderProgramId);
+        int locSampler = glGetUniformLocation(shaderProgramId, "u_texture");
+        glUniform1i(locSampler, 0); // Tell shader u_texture always refers to Texture Unit 0
+        GL20.glUseProgram(0);
+        
+        onWindowResize(new WindowResizedEvent(1024, 512, window));
+    }
+    
+    public void queueGlyph(float x, float y, float z, float u, float v, float r, float g, float b, float a, int textureID) {
+        // 1. Check if we need to switch from Box rendering to Text rendering
+        if (!currentBatchIsTextured || currentAtlasTextureID != textureID) {
+            // Only flush if there is actually data in the buffer
+            if (vertexDataIndex > 0) flush();
+            
+            currentBatchIsTextured = true;
+            currentAtlasTextureID = textureID;
+            begin();
+        }
+        
+        // 2. Check for buffer overflow
+        if (vertexDataIndex + VERTEX_SIZE > vertexData.length) {
+            flush();
+            begin();
+        }
+        
+        // 3. Add exactly 19 floats for ONE vertex
+        vertexData[vertexDataIndex++] = x;
+        vertexData[vertexDataIndex++] = y;
+        vertexData[vertexDataIndex++] = z; // Ensure this is slightly different than the box!
+        vertexData[vertexDataIndex++] = r;
+        vertexData[vertexDataIndex++] = g;
+        vertexData[vertexDataIndex++] = b;
+        vertexData[vertexDataIndex++] = a;
+        vertexData[vertexDataIndex++] = u;
+        vertexData[vertexDataIndex++] = v;
+        
+        // Remaining 10 floats (SizeX, SizeY, Radius, LocalUVx, LocalUVy, BorderThickness, BorderRGBA)
+        // These must be 0 for text so the UI shader doesn't try to draw a rounded border around each letter
+        for (int i = 0; i < 10; i++) {
+            vertexData[vertexDataIndex++] = 0.0f;
+        }
+    }
+    
+    public void queue(UI ui) {
+        // --- BATCH BREAK: Switching from Textured to Untextured ---
+        if (currentBatchIsTextured) {
+            flush();
+            currentBatchIsTextured = false;
+            currentAtlasTextureID = 0;
+            begin();
+        }
+        
+        if (vertexDataIndex + FLOATS_PER_QUAD > vertexData.length) {
+            flush();
+            begin();
+        }
+        
+        RGBA color = ui.getBackgroundColor();
+        float x = ui.getPosition().x(); // Use float for rotation
+        float y = ui.getPosition().y(); // Use float for rotation
+        float w = ui.getWidth();
+        float h = ui.getHeight();
+        
+        float angle = ui.getAngle(); // Assuming this is defined
+        
+        // Calculate pivot
+        float pivotX = x + w / 2.0f;
+        float pivotY = y + h / 2.0f;
+        
+        float cosTheta = (float) Math.cos(Math.toRadians(angle));
+        float sinTheta = (float) Math.sin(Math.toRadians(angle));
+        
+        // Define corner offsets relative to pivot
+        // Corner: TL, BL, BR, TR
+        float[] dx = {-w / 2.0f, -w / 2.0f, w / 2.0f, w / 2.0f};
+        float[] dy = {-h / 2.0f, h / 2.0f, h / 2.0f, -h / 2.0f};
+        
+        // UVs are still 0
+        float[] u = {0.0f, 0.0f, 0.0f, 0.0f}; // TL, BL, BR, TR
+        float[] v = {0.0f, 0.0f, 0.0f, 0.0f}; // TL, BL, BR, TR
+        
+        // Index map: First triangle (0, 1, 2), Second triangle (0, 2, 3)
+        int[] indices = {0, 1, 2, 0, 2, 3};
+        
+        // Corner-local coordinates
+        float[] lx = {0f, 0f, 1f, 1f};
+        float[] ly = {0f, 1f, 1f, 0f};
+        
+        float[] quad = new float[FLOATS_PER_QUAD]; // 6 vertices * 8 floats
+        
+        for (int i = 0; i < 6; i++) {
+            int cornerIndex = indices[i];
+            int vertexOffset = i * VERTEX_SIZE;
+            
+            // 1. Calculate Rotated Position
+            float localX = dx[cornerIndex];
+            float localY = dy[cornerIndex];
+            
+            float rotatedX = localX * cosTheta - localY * sinTheta;
+            float rotatedY = localX * sinTheta + localY * cosTheta;
+            
+            float finalX = rotatedX + pivotX;
+            float finalY = rotatedY + pivotY;
+            
+            // 2. Populate Vertex Data (9 FLOATS per vertex)
+            quad[vertexOffset] = finalX;
+            quad[vertexOffset + 1] = finalY;
+            quad[vertexOffset + 2] = ui.getDrawOrder() * 0.001f;
+            
+            quad[vertexOffset + 3] = color.getRed();
+            quad[vertexOffset + 4] = color.getGreen();
+            quad[vertexOffset + 5] = color.getBlue();
+            quad[vertexOffset + 6] = color.getAlpha();
+            
+            quad[vertexOffset + 7] = u[cornerIndex]; // U
+            quad[vertexOffset + 8] = v[cornerIndex]; // V
+            
+            quad[vertexOffset + 9] = ui.getWidth();
+            quad[vertexOffset + 10] = ui.getHeight();
+            
+            quad[vertexOffset + 11] = ui.getCornerRadius();
+            
+            quad[vertexOffset + 12] = lx[cornerIndex];
+            quad[vertexOffset + 13] = ly[cornerIndex];
+            
+            // Inside the vertex loop
+            quad[vertexOffset + 14] = ui.getBorderThickness(); // in pixels
+            RGBA bColor = ui.getBorderColor();
+            quad[vertexOffset + 15] = bColor.getRed();
+            quad[vertexOffset + 16] = bColor.getGreen();
+            quad[vertexOffset + 17] = bColor.getBlue();
+            quad[vertexOffset + 18] = bColor.getAlpha();
+        }
+        
+        System.arraycopy(quad, 0, vertexData, vertexDataIndex, quad.length);
+        vertexDataIndex += quad.length;
+    }
+    
+    public void queueTextured(int textureIndex, TextureAtlas atlas, RGBA foregroundColor, UI ui) {
+        // --- BATCH BREAK: Switching texture OR switching from untextured ---
+        int atlasID = atlas.getTexture().getTextureID();
+        
+        if (!currentBatchIsTextured || currentAtlasTextureID != atlasID) {
+            flush();
+            currentBatchIsTextured = true;
+            currentAtlasTextureID = atlasID;
+            begin();
+        }
+        
+        if (vertexDataIndex + FLOATS_PER_QUAD > vertexData.length) {
+            flush();
+            begin();
+        }
+        
+        // Get UVs from atlas
+        float x = ui.getPosition().x();
+        float y = ui.getPosition().y();
+        float w = ui.getWidth();
+        float h = ui.getHeight();
+        float angle = ui.getAngle();
+        
+        // Calculate pivot
+        float pivotX = x + w / 2.0f;
+        float pivotY = y + h / 2.0f;
+        
+        float cosTheta = (float) Math.cos(Math.toRadians(angle));
+        float sinTheta = (float) Math.sin(Math.toRadians(angle));
+        
+        // Define corner offsets relative to pivot
+        // Corner: TL, BL, BR, TR
+        float[] dx = {-w / 2.0f, -w / 2.0f, w / 2.0f, w / 2.0f};
+        float[] dy = {-h / 2.0f, h / 2.0f, h / 2.0f, -h / 2.0f};
+        
+        float[] uv = atlas.getUVCoords(textureIndex);
+        
+        // Fixed UV Mapping:
+        // uv[0]=U0 (Left), uv[1]=U1 (Right)
+        // uv[2]=V0 (Top), uv[3]=V1 (Bottom)
+        float[] u = {uv[0], uv[0], uv[1], uv[1]}; // TL(U0), BL(U0), BR(U1), TR(U1)
+        float[] v = {uv[2], uv[3], uv[3], uv[2]}; // TL(V0), BL(V1), BR(V1), TR(V0)
+        
+        // Index map: First triangle (0, 1, 2), Second triangle (0, 2, 3)
+        int[] indices = {0, 1, 2, 0, 2, 3};
+        
+        float[] quad = new float[FLOATS_PER_QUAD]; // 6 vertices * 8 floats
+        
+        float[] lx = {0f, 0f, 1f, 1f};
+        float[] ly = {0f, 1f, 1f, 0f};
+        
+        for (int i = 0; i < 6; i++) {
+            int cornerIndex = indices[i];
+            int vertexOffset = i * VERTEX_SIZE;
+            
+            // 1. Calculate Rotated Position
+            float localX = dx[cornerIndex];
+            float localY = dy[cornerIndex];
+            
+            float rotatedX = localX * cosTheta - localY * sinTheta;
+            float rotatedY = localX * sinTheta + localY * cosTheta;
+            
+            float finalX = rotatedX + pivotX;
+            float finalY = rotatedY + pivotY;
+            
+            // 2. Populate Vertex Data (8 FLOATS per vertex)
+            quad[vertexOffset] = finalX;
+            quad[vertexOffset + 1] = finalY;
+            quad[vertexOffset + 2] = ui.getDrawOrder() * 0.001f;
+            
+            quad[vertexOffset + 3] = foregroundColor.getRed();
+            quad[vertexOffset + 4] = foregroundColor.getGreen();
+            quad[vertexOffset + 5] = foregroundColor.getBlue();
+            quad[vertexOffset + 6] = foregroundColor.getAlpha();
+            
+            quad[vertexOffset + 7] = u[cornerIndex]; // U
+            quad[vertexOffset + 8] = v[cornerIndex]; // V
+            
+            quad[vertexOffset + 9] = ui.getWidth();
+            quad[vertexOffset + 10] = ui.getHeight();
+            
+            quad[vertexOffset + 11] = ui.getCornerRadius();
+            
+            quad[vertexOffset + 12] = lx[cornerIndex];
+            quad[vertexOffset + 13] = ly[cornerIndex];
+            
+            // Inside the vertex loop
+            quad[vertexOffset + 14] = ui.getBorderThickness(); // in pixels
+            RGBA bColor = ui.getBorderColor();
+            quad[vertexOffset + 15] = bColor.getRed();
+            quad[vertexOffset + 16] = bColor.getGreen();
+            quad[vertexOffset + 17] = bColor.getBlue();
+            quad[vertexOffset + 18] = bColor.getAlpha();
+        }
+        
+        System.arraycopy(quad, 0, vertexData, vertexDataIndex, quad.length);
+        vertexDataIndex += quad.length;
+    }
+    
+    public void queueTextureDirect(Texture texture, RGBA foregroundColor, UI ui) {
+        int textureID = texture.getTextureID();
+        
+        // --- BATCH BREAK: If we switch from an atlas to a direct texture, or change direct textures ---
+        if (!currentBatchIsTextured || currentAtlasTextureID != textureID) {
+            flush();
+            currentBatchIsTextured = true;
+            currentAtlasTextureID = textureID;
+            begin();
+        }
+        
+        if (vertexDataIndex + FLOATS_PER_QUAD > vertexData.length) {
+            flush();
+            begin();
+        }
+        
+        float x = ui.getPosition().x();
+        float y = ui.getPosition().y();
+        float w = ui.getWidth();
+        float h = ui.getHeight();
+        float angle = ui.getAngle();
+        
+        float pivotX = x + w / 2.0f;
+        float pivotY = y + h / 2.0f;
+        float cosTheta = (float) Math.cos(Math.toRadians(angle));
+        float sinTheta = (float) Math.sin(Math.toRadians(angle));
+        
+        float[] dx = {-w / 2.0f, -w / 2.0f, w / 2.0f, w / 2.0f};
+        float[] dy = {-h / 2.0f, h / 2.0f, h / 2.0f, -h / 2.0f};
+        
+        // Match these to your dx/dy: TL, BL, BR, TR
+        float[] u = {0.0f, 0.0f, 1.0f, 1.0f};
+        float[] v = {1.0f, 0.0f, 0.0f, 1.0f};
+        
+        float[] lx = {0f, 0f, 1f, 1f};
+        float[] ly = {0f, 1f, 1f, 0f};
+        
+        int[] indices = {0, 1, 2, 0, 2, 3};
+        float[] quad = new float[FLOATS_PER_QUAD];
+        
+        for (int i = 0; i < 6; i++) {
+            int cornerIndex = indices[i];
+            int vertexOffset = i * VERTEX_SIZE;
+            
+            float rotatedX = dx[cornerIndex] * cosTheta - dy[cornerIndex] * sinTheta;
+            float rotatedY = dx[cornerIndex] * sinTheta + dy[cornerIndex] * cosTheta;
+            RGBA bColor = ui.getBorderColor();
+            
+            quad[vertexOffset] = rotatedX + pivotX;
+            quad[vertexOffset + 1] = rotatedY + pivotY;
+            quad[vertexOffset + 2] = ui.getDrawOrder() * 0.001f;
+            quad[vertexOffset + 3] = foregroundColor.getRed();
+            quad[vertexOffset + 4] = foregroundColor.getGreen();
+            quad[vertexOffset + 5] = foregroundColor.getBlue();
+            quad[vertexOffset + 6] = foregroundColor.getAlpha();
+            quad[vertexOffset + 7] = u[cornerIndex];
+            quad[vertexOffset + 8] = v[cornerIndex];
+            quad[vertexOffset + 9] = ui.getWidth();
+            quad[vertexOffset + 10] = ui.getHeight();
+            quad[vertexOffset + 11] = ui.getCornerRadius();
+            quad[vertexOffset + 12] = lx[cornerIndex];
+            quad[vertexOffset + 13] = ly[cornerIndex];
+            quad[vertexOffset + 14] = ui.getBorderThickness(); // in pixels
+            quad[vertexOffset + 15] = bColor.getRed();
+            quad[vertexOffset + 16] = bColor.getGreen();
+            quad[vertexOffset + 17] = bColor.getBlue();
+            quad[vertexOffset + 18] = bColor.getAlpha();
+        }
+        
+        System.arraycopy(quad, 0, vertexData, vertexDataIndex, quad.length);
+        vertexDataIndex += quad.length;
+    }
+    
+    public void begin() {
+        vertexDataIndex = 0; // Reset index for new batch
+    }
+    
+    public void flush() {
+        if (vertexDataIndex == 0) return; // Nothing to draw
+        
+        // 1. Prepare and upload vertex data
+        vertexBuffer.clear();
+        vertexBuffer.put(vertexData, 0, vertexDataIndex).flip();
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vboId);
+        GL15.glBufferSubData(GL15.GL_ARRAY_BUFFER, 0, vertexBuffer);
+        
+        // 2. Activate Shader and VAO
+        GL30.glBindVertexArray(vaoId);
+        GL20.glUseProgram(shaderProgramId);
+        
+        // 3. Set Uniforms based on current batch state
+        
+        // --- CRITICAL: Set the useTexture flag ---
+        int locUseTexture = glGetUniformLocation(shaderProgramId, "useTexture");
+        // Convert Java boolean to int (1 for true, 0 for false)
+        glUniform1i(locUseTexture, currentBatchIsTextured? 1 : 0);
+        
+        // Set projection matrix
+        int locProj = glGetUniformLocation(shaderProgramId, "projection");
+        try (var stack = MemoryStack.stackPush()) {
+            FloatBuffer fb = stack.mallocFloat(16);
+            projection.get(fb);
+            glUniformMatrix4fv(locProj, false, fb);
+        }
+        
+        // --- CRITICAL: Bind Texture for Textured Batch ---
+        if (currentBatchIsTextured) {
+            // Since we set u_texture to 0 in init(), we bind to GL_TEXTURE0
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, currentAtlasTextureID);
+        } else {
+            // Unbind texture unit 0 (good practice)
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+        
+        // 4. OpenGL State Setup
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+        
+        // 5. Draw
+        GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, vertexDataIndex / VERTEX_SIZE);
+        
+        // 6. Cleanup OpenGL State
+        GL11.glDisable(GL11.GL_BLEND);
+        GL20.glUseProgram(0);
+        GL30.glBindVertexArray(0);
+        // No need to unbind texture here if we unbound it above,
+        // but leaving glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0); in the else block is cleaner.
+    }
+    
+    /**
+     * Enable OpenGL scissor test with a given rectangle in virtual UI coordinates.
+     */
+    public void enableScissor(int x, int y, int width, int height) {
+        flush(); // Keep this: Must flush before changing OpenGL state!
+        begin(); // like this?
+        
+        glEnable(GL_SCISSOR_TEST);
+        
+        // --- STEP 1: Convert Virtual (UI) Coordinates to Window (Pixel) Coordinates ---
+        
+        // Convert the top-left corner (x, y) to window coordinates (pixel space)
+        Vector2i windowPos = transformVirtualToWindow(window, new Vector2i(x, y));
+        
+        // Convert the width and height to window pixel space
+        // NOTE: This usually involves calculating the scale factor applied to your UI
+        int windowWidth = (int) (width * window.getWidth() / (float) Display.getWidth());
+        int windowHeight = (int) (height * window.getHeight() / UI_DESIGN_HEIGHT);
+        
+        // --- STEP 2: Flip the Y-coordinate ---
+        // OpenGL's glScissor Y origin is BOTTOM-LEFT.
+        // The converted windowPos.y is measured from the TOP-LEFT.
+        // To get the bottom-left y-coordinate (Y_scissor), subtract the bottom edge from the total height:
+        
+        int scissorX = windowPos.x;
+        int scissorY = window.getHeight() - (windowPos.y + windowHeight); // Total height - (Top Y + Height)
+        
+        // --- STEP 3: Apply Scissor Test ---
+        glScissor(scissorX, scissorY, windowWidth, windowHeight);
+    }
+    
+    /**
+     * Disable OpenGL scissor test.
+     */
+    public void disableScissor() {
+        flush(); // Flush current batch before changing OpenGL state!
+        begin();
+        
+        glDisable(GL_SCISSOR_TEST);
+    }
+    
+    public void changeProgramId(int id) {
+        shaderProgramId = id;
+    }
+    
+    public int getMaxQuads() {
+        return MAX_QUADS;
+    }
+    
+    public void cleanup() {
+        GL15.glDeleteBuffers(vboId);
+        GL30.glDeleteVertexArrays(vaoId);
+        MemoryUtil.memFree(vertexBuffer);
+    }
+    
+    @SubscribeEvent
+    public void onWindowResize(WindowResizedEvent e) {
+        float currentWindowWidth = e.width;
+        float currentWindowHeight = e.height;
+        
+        float currentVirtualWidth = (currentWindowWidth / currentWindowHeight) * UI_DESIGN_HEIGHT;
+        
+        // Set the orthographic projection matrix
+        projection.setOrtho(
+                0.0f,
+                currentVirtualWidth,
+                UI_DESIGN_HEIGHT,
+                0.0f,
+                -100.0f,
+                100.0f
+        );
+    }
+    
+    public void enableScissor(Vector2i position, int width, int height) {
+        enableScissor(position.x, position.y, width, height);
+    }
+}

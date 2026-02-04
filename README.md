@@ -1,7 +1,9 @@
 ## WispUI
+
 **WispUI** is a lightweight, high-performance UI library designed for LWJGL-based voxel engines and games. 
 Built by [InfinityTwo Games](https://github.com/infinitytwogames),
 it focuses on minimal overhead, off-heap memory management.
+
 ---
 ## 🚀 Features
 
@@ -52,6 +54,7 @@ public static void main(String[] args) {
     
     Window window = new Window(width, height, title);
     window.init();
+    Display.init();
     
     // Second: Create a scene
     UIRenderer renderer = new UIRenderer(window);
