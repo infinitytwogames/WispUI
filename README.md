@@ -38,7 +38,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.infinitytwogames:WhispUI:v1.0.0'
+    implementation 'com.github.infinitytwogames:WispUI:v1.0.0'
 }
 ```
 
