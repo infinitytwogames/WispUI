@@ -18,7 +18,7 @@ it focuses on minimal overhead, off-heap memory management.
 This library requires **LWJGL3**:
 - **LWJGL v3** (Core, OpenGL, GLFW, STB)
 - **JOML** (Java OpenGL Math Library)
-- **Java 17+**
+- **Java 16+**
 
 ### **⚠️ Critical Notes**
 1. This library is **not** compatible with **Java Swing** or **JavaFX**.
