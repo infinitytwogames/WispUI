@@ -1,7 +1,7 @@
 ## WispUI
 
 **WispUI** is a lightweight, high-performance UI library designed for LWJGL-based voxel engines and games. 
-Built by [InfinityTwo Games](https://github.com/infinitytwogames),
+Built by [InfinityT wo Games](https://github.com/infinitytwogames),
 it focuses on minimal overhead, off-heap memory management.
 
 ---
