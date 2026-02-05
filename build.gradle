@@ -45,7 +45,7 @@ test {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(8)
+        languageVersion = JavaLanguageVersion.of(16)
     }
     withSourcesJar() // Essential for libraries so you can see code in Nyctotile
     withJavadocJar()
