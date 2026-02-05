@@ -1,4 +1,4 @@
-package org.infinitytwogames.wispui.data.texture;
+package org.infinitytwogames.wispui.data;
 
 import javax.imageio.ImageIO;
 import java.awt.*;

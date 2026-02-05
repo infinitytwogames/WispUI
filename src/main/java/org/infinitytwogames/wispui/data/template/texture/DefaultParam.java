@@ -1,4 +1,4 @@
-package org.infinitytwogames.wispui.data.texture;
+package org.infinitytwogames.wispui.data.template.texture;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL30.glGenerateMipmap;

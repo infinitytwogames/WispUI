@@ -92,10 +92,6 @@ public class Radio implements Component {
         return uis.addAll(collection);
     }
     
-    public void addFirst(UI ui) {
-        uis.addFirst(ui);
-    }
-    
     public <T> T[] toArray(IntFunction<T[]> generator) {
         return uis.toArray(generator);
     }

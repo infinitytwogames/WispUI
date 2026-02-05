@@ -2,6 +2,8 @@ package org.infinitytwogames.wispui;
 
 import org.infinitytwogames.wispui.data.RGBA;
 import org.infinitytwogames.wispui.data.ResourceLoader;
+import org.infinitytwogames.wispui.data.template.window.DefaultWindowParameterHint;
+import org.infinitytwogames.wispui.data.template.window.WindowParameterHint;
 import org.infinitytwogames.wispui.event.bus.EventBus;
 import org.infinitytwogames.wispui.event.input.keyboard.CharacterInputEvent;
 import org.infinitytwogames.wispui.event.input.keyboard.KeyPressEvent;
@@ -53,6 +55,9 @@ public class Window {
     private final Logger logger = LoggerFactory.getLogger(Window.class);
     private static boolean isGLFWInit = false;
     
+    private final int[] tempW = new int[1], tempH = new int[1];
+    private final double[] xpos = new double[1], ypos = new double[1];
+    
     private GLFWFramebufferSizeCallback framebufferSizeCallback;
     private GLFWKeyCallback glfwKeyCallback;
     private GLFWMouseButtonCallback glfwMouseButtonCallback;
@@ -90,7 +95,24 @@ public class Window {
         this.height = height;
         this.width = width;
         this.title = title;
-        initGLFW();
+        initGLFW(DefaultWindowParameterHint.get());
+    }
+    
+    /**
+     * Constructs a new Window and initializes the GLFW backend.
+     * * @param width  Initial pixel width of the window.
+     *
+     * @param height
+     *         Initial pixel height of the window.
+     * @param title
+     *         The text displayed in the window's title bar.
+     *
+     * @param parameter
+     *         A custom window parameter.
+     */
+    public Window(int width, int height, String title, WindowParameterHint parameter) {
+        this(width,height,title);
+        initGLFW(parameter);
     }
     
     /**
@@ -103,7 +125,7 @@ public class Window {
      * @throws RuntimeException
      *         if the window creation fails.
      */
-    private void initGLFW() {
+    private void initGLFW(WindowParameterHint parameter) {
         if (isGLFWInit) return;
         if (!glfwInit()) throw new IllegalStateException("Unable to initiate GLFW");
         long primaryMonitor = GLFW.glfwGetPrimaryMonitor();
@@ -113,10 +135,7 @@ public class Window {
         GLFW.glfwDefaultWindowHints();
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
         
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+        parameter.run();
         
         this.window = GLFW.glfwCreateWindow(width, height, title, MemoryUtil.NULL, MemoryUtil.NULL);
         if (window == MemoryUtil.NULL) {
@@ -187,6 +206,8 @@ public class Window {
                 if (isFocused()) EventBus.dispatch(MouseCoordinatesEvent.get((float) x, (float) y, instance));
             }
         });
+        
+        init();
     }
     
     /**
@@ -195,11 +216,18 @@ public class Window {
      * This <strong>must</strong> be called after the window is created and
      * the context is made current, but before any draw calls.
      * </p>
+     *
+     * <strong>This method is automatically called as soon as the constructor finishes.</strong>
      */
     public void init() {
         GL.createCapabilities();
         GL11.glEnable(GL11.GL_DEPTH_TEST);
         GL11.glViewport(0, 0, width, height);
+    }
+    
+    public void reopen(WindowParameterHint hint) {
+        cleanup();
+        initGLFW(hint);
     }
     
     public long getWindow() {
@@ -240,9 +268,6 @@ public class Window {
     public static void terminateGLFW() {
         GLFW.glfwTerminate();
     }
-    
-    private final double[] xpos = new double[1];
-    private final double[] ypos = new double[1];
     
     public Vector2f getMousePosition() {
         GLFW.glfwGetCursorPos(window, xpos, ypos);
@@ -318,25 +343,19 @@ public class Window {
     }
     
     public Vector2i getSize() {
-        int[] width = new int[1];
-        int[] height = new int[1];
+        GLFW.glfwGetFramebufferSize(window, tempW, tempH);
         
-        GLFW.glfwGetFramebufferSize(window, width, height);
+        this.width = tempW[0];
+        this.height = tempH[0];
         
-        this.width = width[0];
-        this.height = height[0];
-        
-        return new Vector2i(width[0], height[0]);
+        return new Vector2i(tempW[0], tempH[0]);
     }
     
     public void updateSize() {
-        int[] width = new int[1];
-        int[] height = new int[1];
+       GLFW.glfwGetFramebufferSize(window, tempW, tempH);
         
-        GLFW.glfwGetFramebufferSize(window, width, height);
-        
-        this.width = width[0];
-        this.height = height[0];
+        this.width = tempW[0];
+        this.height = tempH[0];
     }
     
     public void close() {

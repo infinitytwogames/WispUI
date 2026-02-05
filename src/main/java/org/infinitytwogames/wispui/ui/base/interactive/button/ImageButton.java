@@ -1,7 +1,7 @@
 package org.infinitytwogames.wispui.ui.base.interactive.button;
 
 import org.infinitytwogames.wispui.data.RGBA;
-import org.infinitytwogames.wispui.data.texture.TextureAtlas;
+import org.infinitytwogames.wispui.data.TextureAtlas;
 import org.infinitytwogames.wispui.event.input.mouse.MouseHoverEvent;
 import org.infinitytwogames.wispui.manager.Mouse;
 import org.infinitytwogames.wispui.renderer.UIRenderer;

@@ -51,7 +51,7 @@ public class Mouse {
      * jump in delta.
      * </p>
      */
-    public static void update() {
+    public static void updatePosition() {
         double[] x = new double[1];
         double[] y = new double[1];
         glfwGetCursorPos(window.getWindow(), x, y);

@@ -1,5 +1,6 @@
-package org.infinitytwogames.wispui.data.texture;
+package org.infinitytwogames.wispui.data;
 
+import org.infinitytwogames.wispui.data.template.texture.TextureParameter;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;

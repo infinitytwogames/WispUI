@@ -18,7 +18,7 @@ it focuses on minimal overhead, off-heap memory management.
 This library requires **LWJGL3**:
 - **LWJGL v3** (Core, OpenGL, GLFW, STB)
 - **JOML** (Java OpenGL Math Library)
-- **Java 16+**
+- **Java 17+**
 
 ### **⚠️ Critical Notes**
 1. This library is **not** compatible with **Java Swing** or **JavaFX**.
@@ -53,8 +53,8 @@ public static void main(String[] args) {
     String title = "WispUI Demo";
     
     Window window = new Window(width, height, title);
-    window.init();
     Display.init();
+    Mouse.init(window);
     
     // Second: Create a scene
     UIRenderer renderer = new UIRenderer(window);

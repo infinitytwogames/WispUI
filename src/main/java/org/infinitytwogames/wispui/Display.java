@@ -51,7 +51,7 @@ public class Display {
      * Scales a virtual UI coordinate to a physical window pixel coordinate.
      * Useful for setting scissors or viewport regions.
      */
-    public void clearBufferBits() {
+    public static void clearBufferBits() {
         glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
     }
     
