@@ -86,7 +86,7 @@ public static void main(String[] args) {
     scene.register(button);
     
     // Third: Make a loop
-    while (window.isShouldClose()) {
+    while (!window.isShouldClose()) {
         Display.clearBufferBits();
         
         SceneManager.draw();
