@@ -59,8 +59,6 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            // Optional: adds source code so you can read it in the debugger
-            artifact sourcesJar
         }
     }
 }
