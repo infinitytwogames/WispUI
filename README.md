@@ -38,7 +38,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.infinitytwogames:WispUI:v1.0.0'
+    implementation 'com.github.infinitytwogames:WispUI:<version_tag_here>'
 }
 ```
 
@@ -124,7 +124,7 @@ We welcome contributions\! As a project in development and more features are nee
 
 This project is licensed under the **GNU GPL v3**. 
 This ensures that the software remains free and open-source. Anyone who modifies
-or distributes this code must also share their source code under the same license.
+or distributes this code must also share their source code under the same or open-source license.
 
 **Trademark Notice:**
 The names **WispUI**, **Infinity Two Games**, and all associated logos are trademarks of Infinity Two Games.

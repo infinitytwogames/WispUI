@@ -53,7 +53,6 @@ public class Window {
     private int width;
     private int height;
     private final Logger logger = LoggerFactory.getLogger(Window.class);
-    private static boolean isGLFWInit = false;
     
     private final int[] tempW = new int[1], tempH = new int[1];
     private final double[] xpos = new double[1], ypos = new double[1];
@@ -126,11 +125,9 @@ public class Window {
      *         if the window creation fails.
      */
     private void initGLFW(WindowParameterHint parameter) {
-        if (isGLFWInit) return;
         if (!glfwInit()) throw new IllegalStateException("Unable to initiate GLFW");
         long primaryMonitor = GLFW.glfwGetPrimaryMonitor();
         GLFWVidMode vidMode = GLFW.glfwGetVideoMode(primaryMonitor);
-        isGLFWInit = true;
         
         GLFW.glfwDefaultWindowHints();
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
@@ -141,6 +138,10 @@ public class Window {
         if (window == MemoryUtil.NULL) {
             throw new RuntimeException("Failed to create the GLFW window");
         }
+
+        float[] xscale = new float[1];
+        float[] yscale = new float[1];
+        GLFW.glfwGetWindowContentScale(window, xscale, yscale);
         
         Window instance = this;
         

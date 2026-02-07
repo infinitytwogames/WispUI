@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
@@ -298,21 +299,29 @@ public class FontRenderer {
     private ByteBuffer loadFont(String resourcePath) throws IOException {
         ByteBuffer buffer;
         
-        // Use the ClassLoader to find the file inside the JAR or IDE resources
-        try (java.io.InputStream is = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
+        // Use the ContextClassLoader to bridge the gap between the Library and the Mod
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        try (java.io.InputStream is = loader.getResourceAsStream(resourcePath)) {
+            
             if (is == null) {
+                // Fallback: try the ClassLoader that loaded this specific class
+                InputStream fallback = getClass().getClassLoader().getResourceAsStream(resourcePath);
+                if (fallback != null) {
+                    return readStreamToBuffer(fallback);
+                }
                 throw new IOException("Font resource not found: " + resourcePath);
             }
             
-            // Read the stream into a byte array
-            byte[] bytes = is.readAllBytes();
-            
-            // Create a direct ByteBuffer (required by LWJGL/STB)
-            buffer = BufferUtils.createByteBuffer(bytes.length);
-            buffer.put(bytes);
-            buffer.flip();
+            return readStreamToBuffer(is);
         }
-        
+    }
+    
+    // Cleaned up helper to avoid code duplication
+    private ByteBuffer readStreamToBuffer(java.io.InputStream is) throws IOException {
+        byte[] bytes = is.readAllBytes();
+        ByteBuffer buffer = BufferUtils.createByteBuffer(bytes.length);
+        buffer.put(bytes);
+        buffer.flip();
         return buffer;
     }
     

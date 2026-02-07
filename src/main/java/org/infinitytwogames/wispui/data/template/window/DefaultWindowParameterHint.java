@@ -22,5 +22,8 @@ public class DefaultWindowParameterHint implements WindowParameterHint {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+        
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
+        glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_TRUE);
     }
 }

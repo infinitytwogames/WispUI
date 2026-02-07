@@ -93,6 +93,7 @@ public class Display {
      * Useful for setting scissors or viewport regions.
      */
     public static Vector2i transformWindowToVirtual(Window window, int windowX, int windowY) {
+        window.updateSize();
         float scale = (float) Display.height / window.getHeight();
         
         int virtualX = (int) (windowX * scale);

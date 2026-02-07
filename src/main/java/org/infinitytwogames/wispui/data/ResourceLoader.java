@@ -49,7 +49,7 @@ public class ResourceLoader {
         
         // 1. Always try the Classpath first.
         // This is the "Universal" way for both IDE and JAR.
-        InputStream source = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource);
+        InputStream source = ResourceLoader.class.getClassLoader().getResourceAsStream(resource);
         
         if (source != null) {
             // Resource found in JAR or IDE Resources folder
